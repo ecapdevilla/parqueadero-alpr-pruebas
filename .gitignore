@@ -1,0 +1,9 @@
+storage/
+*.jpg
+*.jpeg
+*.png
+registro_placas.csv
+*.backup_*
+*.tmp
+__pycache__/
+.env
