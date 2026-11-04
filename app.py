@@ -3,6 +3,7 @@ from fast_alpr import ALPR
 import cv2
 import base64
 import csv
+import hmac
 import os
 import re
 from datetime import datetime, timedelta
@@ -15,11 +16,34 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
 
 UMBRAL_CONFIANZA = 0.70
-ARCHIVO_CSV = os.path.join(BASE_DIR, 'registro_placas.csv')
-CARPETA_STORAGE = os.path.join(BASE_DIR, 'storage')
+DATA_DIR = os.path.abspath(os.environ.get('DATA_DIR', BASE_DIR))
+ARCHIVO_CSV = os.path.join(DATA_DIR, 'registro_placas.csv')
+CARPETA_STORAGE = os.path.join(DATA_DIR, 'storage')
 os.makedirs(CARPETA_STORAGE, exist_ok=True)
 CSV_LOCK = threading.Lock()
 CSV_COLUMNS = ['id', 'fecha_hora', 'placa', 'confianza', 'fuente', 'imagen_path']
+
+
+@app.before_request
+def require_deployment_authentication():
+    if os.environ.get('APP_ENV') != 'production' or request.endpoint == 'health_check':
+        return None
+
+    username = os.environ.get('PARKING_APP_USERNAME')
+    password = os.environ.get('PARKING_APP_PASSWORD')
+    if not username or not password:
+        app.logger.error('La autenticación de producción no está configurada.')
+        return jsonify({'error': 'El acceso de producción no está configurado.'}), 503
+
+    credentials = request.authorization
+    if (credentials is None
+            or not hmac.compare_digest(credentials.username or '', username)
+            or not hmac.compare_digest(credentials.password or '', password)):
+        return 'Autenticación requerida.', 401, {
+            'WWW-Authenticate': 'Basic realm="Parqueadero ALPR", charset="UTF-8"'
+        }
+
+    return None
 
 
 def asegurar_csv_compatible():
@@ -180,6 +204,11 @@ def procesar_resultados(resultados, frame=None):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/healthz')
+def health_check():
+    return jsonify({'status': 'ok'})
 
 
 @app.route('/storage/<path:filename>')

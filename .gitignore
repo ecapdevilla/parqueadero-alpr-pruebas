@@ -7,3 +7,11 @@ registro_placas.csv
 *.tmp
 __pycache__/
 .env
+.env.*
+*.log
+.vercel/
+.render/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
